@@ -19,7 +19,7 @@ if (!apiKey) {
 }
 
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
-const MODEL_NAME = 'gemini-1.5-flash';
+const MODEL_NAME = 'gemini-2.0-flash';
 
 /**
  * Generates 3 strategies (Titles & Descriptions only) for speed optimization.
