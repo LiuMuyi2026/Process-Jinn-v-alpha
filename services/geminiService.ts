@@ -2,7 +2,8 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Step, Strategy, PlanItem, Language } from "../types";
 
 // Check if API key is available
-const rawKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.VITE_GEMINI_API_KEY : undefined);
+const rawKey = import.meta.env.VITE_GEMINI_API_KEY ||
+  (typeof process !== 'undefined' ? (process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY) : undefined);
 const apiKey = (rawKey && rawKey !== 'undefined' && rawKey !== 'null') ? rawKey : undefined;
 
 console.log('Gemini Service - Auth Check:', {
@@ -105,9 +106,9 @@ export const generateStrategies = async (
     }
 
     return strategies.slice(0, 3);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating strategies:', error);
-    throw new Error('Failed to generate strategies. Please try again.');
+    throw new Error(`Failed to generate strategies: ${error.message || 'Please check your connection'}`);
   }
 };
 
@@ -138,69 +139,75 @@ export const generateStrategyPlan = async (
     5. List extracted resources array for each step.
   `;
 
-  const response = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      systemInstruction: `You are a helpful expert planner. You MUST output your response in ${langName}, even if the input text is in a different language.`,
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            type: { type: Type.STRING, enum: ["single", "parallel"] },
-            instruction: { type: Type.STRING },
-            resources: { type: Type.ARRAY, items: { type: Type.STRING } },
-            parallelSteps: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  instruction: { type: Type.STRING },
-                  resources: { type: Type.ARRAY, items: { type: Type.STRING } },
-                },
-                required: ["instruction", "resources"]
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+        systemInstruction: `You are a helpful expert planner. You MUST output your response in ${langName}, even if the input text is in a different language.`,
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              type: { type: Type.STRING, enum: ["single", "parallel"] },
+              instruction: { type: Type.STRING },
+              resources: { type: Type.ARRAY, items: { type: Type.STRING } },
+              parallelSteps: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    instruction: { type: Type.STRING },
+                    resources: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  },
+                  required: ["instruction", "resources"]
+                }
               }
-            }
+            },
           },
         },
       },
-    },
-  });
+    });
 
-  const rawPlan = JSON.parse(response.text || "[]");
+    const text = response.text || "[]";
+    const rawPlan = JSON.parse(text);
 
-  return rawPlan.map((item: any, itemIdx: number) => {
-    const timestamp = Date.now();
+    return rawPlan.map((item: any, itemIdx: number) => {
+      const timestamp = Date.now();
 
-    if (item.type === 'parallel' && item.parallelSteps) {
+      if (item.type === 'parallel' && item.parallelSteps) {
+        return {
+          type: 'parallel',
+          group: {
+            id: `group-${timestamp}-${itemIdx}`,
+            steps: item.parallelSteps.map((ps: any, pIdx: number) => ({
+              id: `step-${timestamp}-${itemIdx}-${pIdx}`,
+              instruction: ps.instruction,
+              resources: ps.resources || [],
+              subSteps: [],
+              isExpanded: false,
+            }))
+          }
+        } as PlanItem;
+      }
+
       return {
-        type: 'parallel',
-        group: {
-          id: `group-${timestamp}-${itemIdx}`,
-          steps: item.parallelSteps.map((ps: any, pIdx: number) => ({
-            id: `step-${timestamp}-${itemIdx}-${pIdx}`,
-            instruction: ps.instruction,
-            resources: ps.resources || [],
-            subSteps: [],
-            isExpanded: false,
-          }))
+        type: 'single',
+        step: {
+          id: `step-${timestamp}-${itemIdx}`,
+          instruction: item.instruction || "Do this step",
+          resources: item.resources || [],
+          subSteps: [],
+          isExpanded: false,
         }
       } as PlanItem;
-    }
-
-    return {
-      type: 'single',
-      step: {
-        id: `step-${timestamp}-${itemIdx}`,
-        instruction: item.instruction || "Do this step",
-        resources: item.resources || [],
-        subSteps: [],
-        isExpanded: false,
-      }
-    } as PlanItem;
-  });
+    });
+  } catch (error: any) {
+    console.error('Error generating strategy plan:', error);
+    throw new Error(`Failed to generate strategy plan: ${error.message || 'Unknown error'}`);
+  }
 };
 
 export const expandStep = async (
@@ -221,33 +228,39 @@ export const expandStep = async (
     2. Identify and bracket [Resources] if new ones appear.
   `;
 
-  const response = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      systemInstruction: `You are a helpful expert planner. You MUST output your response in ${langName}, even if the input text is in a different language.`,
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            instruction: { type: Type.STRING },
-            resources: { type: Type.ARRAY, items: { type: Type.STRING } },
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+        systemInstruction: `You are a helpful expert planner. You MUST output your response in ${langName}, even if the input text is in a different language.`,
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              instruction: { type: Type.STRING },
+              resources: { type: Type.ARRAY, items: { type: Type.STRING } },
+            },
+            required: ["instruction", "resources"],
           },
-          required: ["instruction", "resources"],
         },
       },
-    },
-  });
+    });
 
-  const rawSteps = JSON.parse(response.text || "[]");
+    const text = response.text || "[]";
+    const rawSteps = JSON.parse(text);
 
-  return rawSteps.map((st: any, idx: number) => ({
-    id: `substep-${Date.now()}-${idx}`,
-    instruction: st.instruction,
-    resources: st.resources || [],
-  }));
+    return rawSteps.map((st: any, idx: number) => ({
+      id: `substep-${Date.now()}-${idx}`,
+      instruction: st.instruction,
+      resources: st.resources || [],
+    }));
+  } catch (error: any) {
+    console.error('Error expanding step:', error);
+    throw new Error(`Failed to expand step: ${error.message || 'Unknown error'}`);
+  }
 };
 
 export const generateResourcePlan = async (resourceName: string, language: Language): Promise<Step[]> => {
@@ -263,33 +276,39 @@ export const generateResourcePlan = async (resourceName: string, language: Langu
     2. Wrap any sub-resources in brackets [Like This] if necessary.
   `;
 
-  const response = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      systemInstruction: `You are a helpful expert planner. You MUST output your response in ${langName}, even if the input text is in a different language.`,
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            instruction: { type: Type.STRING },
-            resources: { type: Type.ARRAY, items: { type: Type.STRING } },
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+        systemInstruction: `You are a helpful expert planner. You MUST output your response in ${langName}, even if the input text is in a different language.`,
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              instruction: { type: Type.STRING },
+              resources: { type: Type.ARRAY, items: { type: Type.STRING } },
+            },
+            required: ["instruction", "resources"],
           },
-          required: ["instruction", "resources"],
         },
       },
-    },
-  });
+    });
 
-  const rawSteps = JSON.parse(response.text || "[]");
+    const text = response.text || "[]";
+    const rawSteps = JSON.parse(text);
 
-  return rawSteps.map((st: any, idx: number) => ({
-    id: `res-step-${Date.now()}-${idx}`,
-    instruction: st.instruction,
-    resources: st.resources || [],
-  }));
+    return rawSteps.map((st: any, idx: number) => ({
+      id: `res-step-${Date.now()}-${idx}`,
+      instruction: st.instruction,
+      resources: st.resources || [],
+    }));
+  } catch (error: any) {
+    console.error('Error generating resource plan:', error);
+    throw new Error(`Failed to generate resource plan: ${error.message || 'Unknown error'}`);
+  }
 };
 
 export const regenerateStepText = async (
@@ -310,23 +329,29 @@ export const regenerateStepText = async (
     2. Bracket [Resources].
   `;
 
-  const response = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          instruction: { type: Type.STRING },
-          resources: { type: Type.ARRAY, items: { type: Type.STRING } },
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            instruction: { type: Type.STRING },
+            resources: { type: Type.ARRAY, items: { type: Type.STRING } },
+          },
+          required: ["instruction", "resources"],
         },
-        required: ["instruction", "resources"],
       },
-    },
-  });
+    });
 
-  return JSON.parse(response.text || "{}");
+    const text = response.text || "{}";
+    return JSON.parse(text);
+  } catch (error: any) {
+    console.error('Error regenerating step text:', error);
+    throw new Error(`Failed to regenerate step: ${error.message || 'Unknown error'}`);
+  }
 };
 
 export const regenerateFutureSteps = async (
@@ -352,68 +377,74 @@ export const regenerateFutureSteps = async (
     4. Bracket [Resources].
   `;
 
-  const response = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      systemInstruction: `You are a helpful expert planner. You MUST output your response in ${langName}, even if the input text is in a different language.`,
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            type: { type: Type.STRING, enum: ["single", "parallel"] },
-            instruction: { type: Type.STRING },
-            resources: { type: Type.ARRAY, items: { type: Type.STRING } },
-            parallelSteps: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  instruction: { type: Type.STRING },
-                  resources: { type: Type.ARRAY, items: { type: Type.STRING } },
-                },
-                required: ["instruction", "resources"]
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+        systemInstruction: `You are a helpful expert planner. You MUST output your response in ${langName}, even if the input text is in a different language.`,
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              type: { type: Type.STRING, enum: ["single", "parallel"] },
+              instruction: { type: Type.STRING },
+              resources: { type: Type.ARRAY, items: { type: Type.STRING } },
+              parallelSteps: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    instruction: { type: Type.STRING },
+                    resources: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  },
+                  required: ["instruction", "resources"]
+                }
               }
-            }
+            },
           },
         },
       },
-    },
-  });
+    });
 
-  const rawPlan = JSON.parse(response.text || "[]");
+    const text = response.text || "[]";
+    const rawPlan = JSON.parse(text);
 
-  return rawPlan.map((item: any, itemIdx: number) => {
-    const timestamp = Date.now();
-    const uniqueId = Math.random().toString(36).substr(2, 5);
+    return rawPlan.map((item: any, itemIdx: number) => {
+      const timestamp = Date.now();
+      const uniqueId = Math.random().toString(36).substr(2, 5);
 
-    if (item.type === 'parallel' && item.parallelSteps) {
+      if (item.type === 'parallel' && item.parallelSteps) {
+        return {
+          type: 'parallel',
+          group: {
+            id: `group-regen-${timestamp}-${uniqueId}-${itemIdx}`,
+            steps: item.parallelSteps.map((ps: any, pIdx: number) => ({
+              id: `step-regen-${timestamp}-${uniqueId}-${itemIdx}-${pIdx}`,
+              instruction: ps.instruction,
+              resources: ps.resources || [],
+              subSteps: [],
+              isExpanded: false,
+            }))
+          }
+        } as PlanItem;
+      }
+
       return {
-        type: 'parallel',
-        group: {
-          id: `group-regen-${timestamp}-${uniqueId}-${itemIdx}`,
-          steps: item.parallelSteps.map((ps: any, pIdx: number) => ({
-            id: `step-regen-${timestamp}-${uniqueId}-${itemIdx}-${pIdx}`,
-            instruction: ps.instruction,
-            resources: ps.resources || [],
-            subSteps: [],
-            isExpanded: false,
-          }))
+        type: 'single',
+        step: {
+          id: `step-regen-${timestamp}-${uniqueId}-${itemIdx}`,
+          instruction: item.instruction || "Do this step",
+          resources: item.resources || [],
+          subSteps: [],
+          isExpanded: false,
         }
       } as PlanItem;
-    }
-
-    return {
-      type: 'single',
-      step: {
-        id: `step-regen-${timestamp}-${uniqueId}-${itemIdx}`,
-        instruction: item.instruction || "Do this step",
-        resources: item.resources || [],
-        subSteps: [],
-        isExpanded: false,
-      }
-    } as PlanItem;
-  });
+    });
+  } catch (error: any) {
+    console.error('Error regenerating future steps:', error);
+    throw new Error(`Failed to regenerate future steps: ${error.message || 'Unknown error'}`);
+  }
 };
