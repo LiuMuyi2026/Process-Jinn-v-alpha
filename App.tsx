@@ -471,7 +471,7 @@ const AppContent: React.FC = () => {
         selectedStrategyId: state.selectedStrategyId
       };
       
-      await saveProcess(user.uid, processToSave);
+      await saveProcess(user.id, processToSave);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {

@@ -1,8 +1,15 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Step, Strategy, PlanItem, Language } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-const MODEL_NAME = 'gemini-3-flash-preview';
+// Check if API key is available
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.VITE_GEMINI_API_KEY : undefined);
+
+if (!apiKey) {
+  console.warn('VITE_GEMINI_API_KEY not found. AI features will be disabled.');
+}
+
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+const MODEL_NAME = 'gemini-1.5-flash';
 
 /**
  * Generates 3 strategies (Titles & Descriptions only) for speed optimization.
@@ -13,8 +20,12 @@ export const generateStrategies = async (
   environment: string,
   language: Language
 ): Promise<Strategy[]> => {
+  if (!ai) {
+    throw new Error('AI service not available. Please check your API key configuration.');
+  }
+
   const langName = language === 'zh' ? 'Simplified Chinese' : 'English';
-  
+
   const prompt = `
     User Goal: "${goal}"
     Quantification: "${quantification}"
@@ -28,35 +39,71 @@ export const generateStrategies = async (
     3. DO NOT generate the detailed steps yet.
   `;
 
-  const response = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      systemInstruction: `You are a helpful expert planner. You MUST output your response in ${langName}, even if the input text is in a different language.`,
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            description: { type: Type.STRING },
-          },
-          required: ["title", "description"],
-        },
-      },
-    },
-  });
+  try {
+    // Debug: Check what methods are available
+    console.log('AI object:', ai);
+    console.log('Available methods:', Object.getOwnPropertyNames(ai));
 
-  const rawStrategies = JSON.parse(response.text || "[]");
+    // Try the correct API call based on Google AI SDK v1.35.0
+    const result = await ai.generateContent({
+      model: MODEL_NAME,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }]
+    });
+    const text = result.response.text();
 
-  return rawStrategies.map((s: any, stratIdx: number) => ({
-    id: `strategy-${Date.now()}-${stratIdx}`,
-    title: s.title,
-    description: s.description,
-    plan: [], // Empty initially for lazy loading
-    planLanguage: undefined
-  }));
+    // Parse the response into strategies
+    const strategies: Strategy[] = [];
+    const lines = text.split('\n').filter(line => line.trim());
+
+    let currentStrategy: Partial<Strategy> = {};
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+
+      // Check if it's a title (starts with number or is short)
+      if (trimmedLine.match(/^\d+\./) || (trimmedLine.length < 100 && !currentStrategy.title)) {
+        // Save previous strategy if exists
+        if (currentStrategy.title && currentStrategy.description) {
+          strategies.push({
+            id: `strategy-${strategies.length + 1}`,
+            title: currentStrategy.title,
+            description: currentStrategy.description
+          });
+        }
+
+        // Start new strategy
+        currentStrategy = {
+          title: trimmedLine.replace(/^\d+\.\s*/, '').trim()
+        };
+      } else if (currentStrategy.title && !currentStrategy.description) {
+        // Add to description
+        currentStrategy.description = trimmedLine;
+      }
+    }
+
+    // Add the last strategy
+    if (currentStrategy.title && currentStrategy.description) {
+      strategies.push({
+        id: `strategy-${strategies.length + 1}`,
+        title: currentStrategy.title,
+        description: currentStrategy.description
+      });
+    }
+
+    // Ensure we have exactly 3 strategies
+    while (strategies.length < 3) {
+      strategies.push({
+        id: `strategy-${strategies.length + 1}`,
+        title: `Strategy ${strategies.length + 1}`,
+        description: `An alternative approach to achieve your goal.`
+      });
+    }
+
+    return strategies.slice(0, 3);
+  } catch (error) {
+    console.error('Error generating strategies:', error);
+    throw new Error('Failed to generate strategies. Please try again.');
+  }
 };
 
 /**
@@ -105,8 +152,8 @@ export const generateStrategyPlan = async (
               items: {
                 type: Type.OBJECT,
                 properties: {
-                   instruction: { type: Type.STRING },
-                   resources: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  instruction: { type: Type.STRING },
+                  resources: { type: Type.ARRAY, items: { type: Type.STRING } },
                 },
                 required: ["instruction", "resources"]
               }
@@ -121,7 +168,7 @@ export const generateStrategyPlan = async (
 
   return rawPlan.map((item: any, itemIdx: number) => {
     const timestamp = Date.now();
-    
+
     if (item.type === 'parallel' && item.parallelSteps) {
       return {
         type: 'parallel',
@@ -319,8 +366,8 @@ export const regenerateFutureSteps = async (
               items: {
                 type: Type.OBJECT,
                 properties: {
-                   instruction: { type: Type.STRING },
-                   resources: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  instruction: { type: Type.STRING },
+                  resources: { type: Type.ARRAY, items: { type: Type.STRING } },
                 },
                 required: ["instruction", "resources"]
               }
@@ -336,7 +383,7 @@ export const regenerateFutureSteps = async (
   return rawPlan.map((item: any, itemIdx: number) => {
     const timestamp = Date.now();
     const uniqueId = Math.random().toString(36).substr(2, 5);
-    
+
     if (item.type === 'parallel' && item.parallelSteps) {
       return {
         type: 'parallel',

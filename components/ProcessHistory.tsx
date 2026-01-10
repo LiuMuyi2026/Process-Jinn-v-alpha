@@ -23,10 +23,10 @@ export const ProcessHistory: React.FC<ProcessHistoryProps> = ({ onLoadProcess, o
 
   const loadProcesses = async () => {
     if (!user) return;
-    
+
     setLoading(true);
     try {
-      const userProcesses = await getUserProcesses(user.uid);
+      const userProcesses = await getUserProcesses(user.id);
       setProcesses(userProcesses);
     } catch (err: any) {
       setError(err.message || 'Failed to load processes');
@@ -37,11 +37,11 @@ export const ProcessHistory: React.FC<ProcessHistoryProps> = ({ onLoadProcess, o
 
   const handleDeleteProcess = async (processId: string) => {
     if (!user) return;
-    
+
     if (!confirm('Are you sure you want to delete this process?')) return;
-    
+
     try {
-      await deleteProcess(user.uid, processId);
+      await deleteProcess(user.id, processId);
       setProcesses(processes.filter(p => p.id !== processId));
     } catch (err: any) {
       setError(err.message || 'Failed to delete process');
