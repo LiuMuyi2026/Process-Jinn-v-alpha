@@ -4,6 +4,12 @@ import { Step, Strategy, PlanItem, Language } from "../types";
 // Check if API key is available
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.VITE_GEMINI_API_KEY : undefined);
 
+console.log('Gemini Service - Auth Check:', {
+  hasViteKey: !!import.meta.env.VITE_GEMINI_API_KEY,
+  hasProcessKey: typeof process !== 'undefined' && !!process.env.VITE_GEMINI_API_KEY,
+  finalResolved: !!apiKey
+});
+
 if (!apiKey) {
   console.warn('VITE_GEMINI_API_KEY not found. AI features will be disabled.');
 }
