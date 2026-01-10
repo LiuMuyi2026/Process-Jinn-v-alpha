@@ -50,51 +50,36 @@ export const generateStrategies = async (
   `;
 
   try {
-    // Use standardized SDK call
+    // Use standardized SDK call with structured JSON output
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
-      contents: [{ role: 'user', parts: [{ text: prompt }] }]
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+        systemInstruction: `You are a helpful expert planner. Generate exactly 3 distinct strategies. Output in ${langName}.`,
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              description: { type: Type.STRING },
+            },
+            required: ["title", "description"],
+          },
+        },
+      },
     });
-    const text = response.text || "";
 
-    // Parse the response into strategies
-    const strategies: Strategy[] = [];
-    const lines = text.split('\n').filter(line => line.trim());
+    const text = response.text || "[]";
+    const rawStrategies = JSON.parse(text);
 
-    let currentStrategy: Partial<Strategy> = {};
-
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-
-      // Check if it's a title (starts with number or is short)
-      if (trimmedLine.match(/^\d+\./) || (trimmedLine.length < 100 && !currentStrategy.title)) {
-        // Save previous strategy if exists
-        if (currentStrategy.title && currentStrategy.description) {
-          strategies.push({
-            id: `strategy-${strategies.length + 1}`,
-            title: currentStrategy.title,
-            description: currentStrategy.description
-          });
-        }
-
-        // Start new strategy
-        currentStrategy = {
-          title: trimmedLine.replace(/^\d+\.\s*/, '').trim()
-        };
-      } else if (currentStrategy.title && !currentStrategy.description) {
-        // Add to description
-        currentStrategy.description = trimmedLine;
-      }
-    }
-
-    // Add the last strategy
-    if (currentStrategy.title && currentStrategy.description) {
-      strategies.push({
-        id: `strategy-${strategies.length + 1}`,
-        title: currentStrategy.title,
-        description: currentStrategy.description
-      });
-    }
+    // Map to Strategy objects with IDs
+    const strategies: Strategy[] = rawStrategies.slice(0, 3).map((item: any, idx: number) => ({
+      id: `strategy-${idx + 1}`,
+      title: item.title || `Strategy ${idx + 1}`,
+      description: item.description || `An approach to achieve your goal.`
+    }));
 
     // Ensure we have exactly 3 strategies
     while (strategies.length < 3) {
@@ -105,7 +90,7 @@ export const generateStrategies = async (
       });
     }
 
-    return strategies.slice(0, 3);
+    return strategies;
   } catch (error: any) {
     console.error('Error generating strategies:', error);
     throw new Error(`Failed to generate strategies: ${error.message || 'Please check your connection'}`);
