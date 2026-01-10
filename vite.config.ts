@@ -4,8 +4,10 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
-  // Support multiple env var names: VITE_API_KEY (user's choice), VITE_GEMINI_API_KEY, GEMINI_API_KEY
-  const vKey = env.VITE_API_KEY || env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY;
+  // Vercel injects env vars into process.env during build, loadEnv only reads .env files
+  // So we prioritize process.env for Vercel, then fall back to .env file values
+  const vKey = process.env.VITE_API_KEY || process.env.VITE_GEMINI_API_KEY ||
+    env.VITE_API_KEY || env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY;
 
   return {
     server: {
