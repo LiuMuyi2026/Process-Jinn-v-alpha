@@ -2,16 +2,19 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Step, Strategy, PlanItem, Language } from "../types";
 
 // Check if API key is available
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.VITE_GEMINI_API_KEY : undefined);
+const rawKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.VITE_GEMINI_API_KEY : undefined);
+const apiKey = (rawKey && rawKey !== 'undefined' && rawKey !== 'null') ? rawKey : undefined;
 
 console.log('Gemini Service - Auth Check:', {
   hasViteKey: !!import.meta.env.VITE_GEMINI_API_KEY,
+  viteKeyType: typeof import.meta.env.VITE_GEMINI_API_KEY,
   hasProcessKey: typeof process !== 'undefined' && !!process.env.VITE_GEMINI_API_KEY,
-  finalResolved: !!apiKey
+  finalResolved: !!apiKey,
+  keyPrefix: apiKey ? apiKey.substring(0, 4) + '...' : 'none'
 });
 
 if (!apiKey) {
-  console.warn('VITE_GEMINI_API_KEY not found. AI features will be disabled.');
+  console.warn('VITE_GEMINI_API_KEY not found or invalid. AI features will be disabled.');
 }
 
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
@@ -46,16 +49,12 @@ export const generateStrategies = async (
   `;
 
   try {
-    // Debug: Check what methods are available
-    console.log('AI object:', ai);
-    console.log('Available methods:', Object.getOwnPropertyNames(ai));
-
-    // Try the correct API call based on Google AI SDK v1.35.0
-    const result = await ai.generateContent({
+    // Use standardized SDK call
+    const response = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: [{ role: 'user', parts: [{ text: prompt }] }]
     });
-    const text = result.response.text();
+    const text = response.text || "";
 
     // Parse the response into strategies
     const strategies: Strategy[] = [];
