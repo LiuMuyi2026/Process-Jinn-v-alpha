@@ -1,9 +1,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Step, Strategy, PlanItem, Language } from "../types";
 
-// Check if API key is available
-const rawKey = import.meta.env.VITE_GEMINI_API_KEY ||
-  (typeof process !== 'undefined' ? (process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY) : undefined);
+// Check if API key is available - supports VITE_API_KEY (user's choice), VITE_GEMINI_API_KEY, etc.
+const rawKey = import.meta.env.VITE_API_KEY || import.meta.env.VITE_GEMINI_API_KEY ||
+  (typeof process !== 'undefined' ? (process.env.VITE_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY) : undefined);
 const apiKey = (rawKey && rawKey !== 'undefined' && rawKey !== 'null') ? rawKey : undefined;
 
 console.log('Gemini Service - Auth Check:', {
