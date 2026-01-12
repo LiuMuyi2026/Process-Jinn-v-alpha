@@ -24,14 +24,17 @@ export interface ParallelGroup {
   steps: Step[];
 }
 
-export type PlanItem = 
-  | { type: 'single'; step: Step } 
+export type PlanItem =
+  | { type: 'single'; step: Step }
   | { type: 'parallel'; group: ParallelGroup };
 
 export interface Strategy {
   id: string;
   title: string;
   description: string;
+  approachType?: string;
+  firstAction?: string;
+  keyAdvantage?: string;
   plan?: PlanItem[]; // Optional for lazy loading
   planLoading?: boolean;
   planLanguage?: Language;

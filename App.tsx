@@ -67,20 +67,20 @@ const AppContent: React.FC = () => {
   const handleGenerate = async () => {
     if (!state.description.trim()) return;
 
-    setState(prev => ({ 
-      ...prev, 
-      loading: true, 
+    setState(prev => ({
+      ...prev,
+      loading: true,
       stage: 'PROCESSING',
-      error: null, 
-      strategies: [], 
+      error: null,
+      strategies: [],
       resources: [],
       selectedResourceId: null,
       selectedStrategyId: null
     }));
-    
+
     try {
       const strategies = await generateStrategies(state.description, state.quantification, state.environment, state.language);
-      
+
       setState(prev => ({
         ...prev,
         loading: false,
@@ -106,31 +106,31 @@ const AppContent: React.FC = () => {
 
     // Lazy load the plan if it doesn't exist OR if language has changed
     if (!strategy.plan || strategy.plan.length === 0 || strategy.planLanguage !== state.language) {
-       setState(prev => ({ ...prev, loading: true, stage: 'PROCESSING' })); // Reuse processing screen briefly
-       
-       try {
-         const plan = await generateStrategyPlan(strategy, state.description, state.environment, state.language);
-         
-         const newResources = extractResourcesFromPlan(plan);
-         
-         setState(prev => ({
-           ...prev,
-           loading: false,
-           stage: 'PROCESS',
-           selectedStrategyId: strategyId,
-           resources: newResources,
-           strategies: prev.strategies.map(s => s.id === strategyId ? { ...s, plan, planLanguage: state.language } : s)
-         }));
+      setState(prev => ({ ...prev, loading: true, stage: 'PROCESSING' })); // Reuse processing screen briefly
 
-       } catch (err) {
-         console.error(err);
-         setState(prev => ({
-           ...prev,
-           loading: false,
-           stage: 'SELECTION',
-           error: t.errorGeneric
-         }));
-       }
+      try {
+        const plan = await generateStrategyPlan(strategy, state.description, state.environment, state.language);
+
+        const newResources = extractResourcesFromPlan(plan);
+
+        setState(prev => ({
+          ...prev,
+          loading: false,
+          stage: 'PROCESS',
+          selectedStrategyId: strategyId,
+          resources: newResources,
+          strategies: prev.strategies.map(s => s.id === strategyId ? { ...s, plan, planLanguage: state.language } : s)
+        }));
+
+      } catch (err) {
+        console.error(err);
+        setState(prev => ({
+          ...prev,
+          loading: false,
+          stage: 'SELECTION',
+          error: t.errorGeneric
+        }));
+      }
 
     } else {
       // Plan already exists and matches language
@@ -143,30 +143,30 @@ const AppContent: React.FC = () => {
   };
 
   const extractResourcesFromPlan = (plan: PlanItem[], existingResources: Resource[] = []): Resource[] => {
-      const newResources: Resource[] = [...existingResources];
-      const seenResources = new Set<string>(existingResources.map(r => r.name.toLowerCase()));
+    const newResources: Resource[] = [...existingResources];
+    const seenResources = new Set<string>(existingResources.map(r => r.name.toLowerCase()));
 
-      const addResource = (resName: string) => {
-        const cleanName = resName.replace(/[\[\]]/g, '').trim(); 
-        if (cleanName && !seenResources.has(cleanName.toLowerCase())) {
-          seenResources.add(cleanName.toLowerCase());
-          newResources.push({
-            id: `res-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            name: cleanName,
-            isExpanded: false,
-            language: state.language
-          });
-        }
-      };
+    const addResource = (resName: string) => {
+      const cleanName = resName.replace(/[\[\]]/g, '').trim();
+      if (cleanName && !seenResources.has(cleanName.toLowerCase())) {
+        seenResources.add(cleanName.toLowerCase());
+        newResources.push({
+          id: `res-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: cleanName,
+          isExpanded: false,
+          language: state.language
+        });
+      }
+    };
 
-      plan.forEach(item => {
-        if (item.type === 'single') {
-          item.step.resources.forEach(addResource);
-        } else {
-          item.group.steps.forEach(s => s.resources.forEach(addResource));
-        }
-      });
-      return newResources;
+    plan.forEach(item => {
+      if (item.type === 'single') {
+        item.step.resources.forEach(addResource);
+      } else {
+        item.group.steps.forEach(s => s.resources.forEach(addResource));
+      }
+    });
+    return newResources;
   };
 
   const handleReset = () => {
@@ -192,9 +192,9 @@ const AppContent: React.FC = () => {
   // --- New Handlers for Edit/Check/Regenerate ---
 
   const handleToggleComplete = (step: Step) => {
-     updateStepInState(step.id, { isCompleted: !step.isCompleted });
+    updateStepInState(step.id, { isCompleted: !step.isCompleted });
   };
-  
+
   const handleToggleResourceStepComplete = (resourceId: string, stepId: string) => {
     setState(prev => ({
       ...prev,
@@ -203,7 +203,7 @@ const AppContent: React.FC = () => {
         if (!res.acquisitionSteps) return res;
         return {
           ...res,
-          acquisitionSteps: res.acquisitionSteps.map(step => 
+          acquisitionSteps: res.acquisitionSteps.map(step =>
             step.id === stepId ? { ...step, isCompleted: !step.isCompleted } : step
           )
         };
@@ -212,118 +212,118 @@ const AppContent: React.FC = () => {
   };
 
   const handleRegenerateStep = async (step: Step) => {
-     updateStepInState(step.id, { loading: true });
-     try {
-       const context = `${state.description} ${state.environment}`;
-       const result = await regenerateStepText(step.instruction, context, state.language);
-       
-       updateStepInState(step.id, { 
-         loading: false, 
-         instruction: result.instruction,
-         resources: result.resources,
-         subSteps: undefined, // Clear old substeps
-         isExpanded: false
-       });
-       
-       // Add new resources if found
-       if (result.resources.length > 0) {
-          setState(prev => ({
-             ...prev,
-             resources: extractResourcesFromPlan([{type: 'single', step: { ...step, resources: result.resources }}], prev.resources)
-          }));
-       }
-     } catch(e) {
-       console.error(e);
-       updateStepInState(step.id, { loading: false });
-     }
+    updateStepInState(step.id, { loading: true });
+    try {
+      const context = `${state.description} ${state.environment}`;
+      const result = await regenerateStepText(step.instruction, context, state.language);
+
+      updateStepInState(step.id, {
+        loading: false,
+        instruction: result.instruction,
+        resources: result.resources,
+        subSteps: undefined, // Clear old substeps
+        isExpanded: false
+      });
+
+      // Add new resources if found
+      if (result.resources.length > 0) {
+        setState(prev => ({
+          ...prev,
+          resources: extractResourcesFromPlan([{ type: 'single', step: { ...step, resources: result.resources } }], prev.resources)
+        }));
+      }
+    } catch (e) {
+      console.error(e);
+      updateStepInState(step.id, { loading: false });
+    }
   };
 
   const handleEditStep = async (step: Step, newText: string, mode: 'save' | 'substeps' | 'future') => {
-      // 1. Update the text immediately
-      // Extract pseudo-resources from bracketed text
-      const regex = /\[(.*?)\]/g;
-      const foundResources = [];
-      let match;
-      while ((match = regex.exec(newText)) !== null) {
-         foundResources.push(match[1]);
-      }
+    // 1. Update the text immediately
+    // Extract pseudo-resources from bracketed text
+    const regex = /\[(.*?)\]/g;
+    const foundResources = [];
+    let match;
+    while ((match = regex.exec(newText)) !== null) {
+      foundResources.push(match[1]);
+    }
 
-      updateStepInState(step.id, { 
-          instruction: newText, 
-          resources: foundResources
-      });
+    updateStepInState(step.id, {
+      instruction: newText,
+      resources: foundResources
+    });
 
-      // Update global resources list
-      if (foundResources.length > 0) {
-        setState(prev => ({
-            ...prev,
-            resources: extractResourcesFromPlan([{type: 'single', step: { ...step, resources: foundResources }}], prev.resources)
-         }));
-      }
+    // Update global resources list
+    if (foundResources.length > 0) {
+      setState(prev => ({
+        ...prev,
+        resources: extractResourcesFromPlan([{ type: 'single', step: { ...step, resources: foundResources } }], prev.resources)
+      }));
+    }
 
-      // 2. Handle specific modes
-      if (mode === 'substeps') {
-          // Trigger expand
-          const activeStrategy = state.strategies.find(s => s.id === state.selectedStrategyId);
-          if (activeStrategy) {
-              performExpandStep({ ...step, instruction: newText }, activeStrategy.title);
-          }
-      } else if (mode === 'future') {
-          handleRegenerateFuture(step.id, newText);
+    // 2. Handle specific modes
+    if (mode === 'substeps') {
+      // Trigger expand
+      const activeStrategy = state.strategies.find(s => s.id === state.selectedStrategyId);
+      if (activeStrategy) {
+        performExpandStep({ ...step, instruction: newText }, activeStrategy.title);
       }
+    } else if (mode === 'future') {
+      handleRegenerateFuture(step.id, newText);
+    }
   };
 
   const handleRegenerateFuture = async (stepId: string, currentText: string) => {
-      const activeStrategy = state.strategies.find(s => s.id === state.selectedStrategyId);
-      if (!activeStrategy || !activeStrategy.plan) return;
+    const activeStrategy = state.strategies.find(s => s.id === state.selectedStrategyId);
+    if (!activeStrategy || !activeStrategy.plan) return;
 
-      // Find index of the edited step
-      const planIndex = activeStrategy.plan.findIndex(item => 
-          item.type === 'single' ? item.step.id === stepId : item.group.steps.some(s => s.id === stepId)
-      );
+    // Find index of the edited step
+    const planIndex = activeStrategy.plan.findIndex(item =>
+      item.type === 'single' ? item.step.id === stepId : item.group.steps.some(s => s.id === stepId)
+    );
 
-      if (planIndex === -1 || planIndex === activeStrategy.plan.length - 1) return; // Not found or last step
+    if (planIndex === -1 || planIndex === activeStrategy.plan.length - 1) return; // Not found or last step
 
-      const itemsToRegenerateCount = activeStrategy.plan.length - 1 - planIndex;
-      const contextSteps = activeStrategy.plan.slice(0, planIndex + 1).map(item => {
-         if (item.type === 'single') return item.step.instruction;
-         return item.group.steps.map(s => s.instruction).join(" AND ");
-      });
-      
-      // Show loading on subsequent steps
-      const updatedPlanLoading = activeStrategy.plan.map((item, idx) => {
-          if (idx > planIndex) {
-             if (item.type === 'single') return { ...item, step: { ...item.step, loading: true }};
-             // Simplified: parallel groups loading
-             return item;
-          }
-          return item;
-      });
-      
+    const itemsToRegenerateCount = activeStrategy.plan.length - 1 - planIndex;
+    const contextSteps = activeStrategy.plan.slice(0, planIndex + 1).map(item => {
+      if (item.type === 'single') return item.step.instruction;
+      return item.group.steps.map(s => s.instruction).join(" AND ");
+    });
+
+    // Show loading on subsequent steps
+    const updatedPlanLoading = activeStrategy.plan.map((item, idx) => {
+      if (idx > planIndex) {
+        if (item.type === 'single') return { ...item, step: { ...item.step, loading: true } };
+        // Simplified: parallel groups loading
+        return item;
+      }
+      return item;
+    });
+
+    setState(prev => ({
+      ...prev,
+      strategies: prev.strategies.map(s => s.id === state.selectedStrategyId ? { ...s, plan: updatedPlanLoading } : s)
+    }));
+
+    try {
+      const newFutureItems = await regenerateFutureSteps(state.description, contextSteps, currentText, itemsToRegenerateCount, state.language);
+
+      const finalPlan = [...activeStrategy.plan.slice(0, planIndex + 1), ...newFutureItems];
+
       setState(prev => ({
         ...prev,
-        strategies: prev.strategies.map(s => s.id === state.selectedStrategyId ? { ...s, plan: updatedPlanLoading } : s)
+        strategies: prev.strategies.map(s => s.id === state.selectedStrategyId ? { ...s, plan: finalPlan } : s),
+        resources: extractResourcesFromPlan(newFutureItems, prev.resources)
       }));
 
-      try {
-         const newFutureItems = await regenerateFutureSteps(state.description, contextSteps, currentText, itemsToRegenerateCount, state.language);
-         
-         const finalPlan = [...activeStrategy.plan.slice(0, planIndex + 1), ...newFutureItems];
-         
-         setState(prev => ({
-            ...prev,
-            strategies: prev.strategies.map(s => s.id === state.selectedStrategyId ? { ...s, plan: finalPlan } : s),
-            resources: extractResourcesFromPlan(newFutureItems, prev.resources)
-         }));
-
-      } catch(e) {
-          console.error(e);
-          // Revert loading state
-          setState(prev => ({
-             ...prev,
-             strategies: prev.strategies.map(s => s.id === state.selectedStrategyId ? { ...s, plan: activeStrategy.plan } : s)
-          }));
-      }
+    } catch (e) {
+      console.error(e);
+      // Revert loading state
+      setState(prev => ({
+        ...prev,
+        strategies: prev.strategies.map(s => s.id === state.selectedStrategyId ? { ...s, plan: activeStrategy.plan } : s)
+      }));
+    }
   };
 
   const handleExpandStep = async (targetStep: Step, contextStrategyTitle: string) => {
@@ -341,23 +341,23 @@ const AppContent: React.FC = () => {
       const envContext = state.environment ? ` [Environment: ${state.environment}]` : '';
       const context = `${state.description}${envContext} (Strategy: ${contextStrategyTitle})`;
       const subSteps = await expandStep(targetStep.instruction, context, state.language);
-      
+
       // Update resources
       let updatedResources = [...state.resources];
       const seen = new Set(updatedResources.map(r => r.name.toLowerCase()));
       subSteps.forEach(s => {
-          s.resources.forEach(r => {
-            const clean = r.replace(/[\[\]]/g, '').trim();
-            if (clean && !seen.has(clean.toLowerCase())) {
-                seen.add(clean.toLowerCase());
-                updatedResources.push({
-                    id: `res-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                    name: clean,
-                    isExpanded: false,
-                    language: state.language
-                });
-            }
-          });
+        s.resources.forEach(r => {
+          const clean = r.replace(/[\[\]]/g, '').trim();
+          if (clean && !seen.has(clean.toLowerCase())) {
+            seen.add(clean.toLowerCase());
+            updatedResources.push({
+              id: `res-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              name: clean,
+              isExpanded: false,
+              language: state.language
+            });
+          }
+        });
       });
 
       setState(prev => ({
@@ -388,13 +388,13 @@ const AppContent: React.FC = () => {
       }
     } else {
       const newRes: Resource = {
-         id: `res-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-         name: cleanName,
-         isExpanded: true,
-         loading: true,
-         language: state.language
+        id: `res-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        name: cleanName,
+        isExpanded: true,
+        loading: true,
+        language: state.language
       };
-      
+
       setState(prev => ({
         ...prev,
         resources: [newRes, ...prev.resources],
@@ -421,7 +421,7 @@ const AppContent: React.FC = () => {
     setState(prev => {
       const newStrategies = prev.strategies.map(strat => {
         if (!strat.plan) return strat;
-        
+
         const processSteps = (steps: Step[]): Step[] => {
           return steps.map(step => {
             if (step.id === stepId) return { ...step, ...updates };
@@ -432,16 +432,16 @@ const AppContent: React.FC = () => {
 
         const newPlan = strat.plan.map((item): PlanItem => {
           if (item.type === 'single') {
-             if (item.step.id === stepId) {
-                return { ...item, step: { ...item.step, ...updates } };
-             }
-             if (item.step.subSteps) {
-                return { ...item, step: { ...item.step, subSteps: processSteps(item.step.subSteps) } };
-             }
-             return item;
+            if (item.step.id === stepId) {
+              return { ...item, step: { ...item.step, ...updates } };
+            }
+            if (item.step.subSteps) {
+              return { ...item, step: { ...item.step, subSteps: processSteps(item.step.subSteps) } };
+            }
+            return item;
           } else {
-             const updatedGroupSteps = processSteps(item.group.steps);
-             return { ...item, group: { ...item.group, steps: updatedGroupSteps } };
+            const updatedGroupSteps = processSteps(item.group.steps);
+            return { ...item, group: { ...item.group, steps: updatedGroupSteps } };
           }
         });
 
@@ -460,7 +460,7 @@ const AppContent: React.FC = () => {
 
   const handleSaveProcess = async () => {
     if (!user) return;
-    
+
     setSaving(true);
     try {
       const processToSave = {
@@ -470,7 +470,7 @@ const AppContent: React.FC = () => {
         strategies: state.strategies,
         selectedStrategyId: state.selectedStrategyId
       };
-      
+
       await saveProcess(user.id, processToSave);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -530,57 +530,57 @@ const AppContent: React.FC = () => {
 
   const generatePlainText = () => {
     if (!activeStrategy) return '';
-    
+
     let text = `${t.appTitle} Plan\n\n`;
     text += `${t.labelGoal}: ${state.description}\n`;
     if (state.quantification) text += `${t.labelSpecifics}: ${state.quantification}\n`;
     if (state.environment) text += `${t.labelEnvironment}: ${state.environment}\n`;
     text += `\n--------------------------------\n\n`;
-    
+
     text += `${t.headerSelected}: ${activeStrategy.title}\n`;
     text += `${activeStrategy.description}\n\n`;
-    
+
     text += `${t.headerRoadmap}:\n`;
 
     activeStrategy.plan?.forEach((item, idx) => {
-       if (item.type === 'single') {
-          const check = item.step.isCompleted ? '[x]' : '[ ]';
-          text += `${idx + 1}. ${check} ${item.step.instruction}\n`;
-           if (item.step.subSteps) {
-              item.step.subSteps.forEach((sub) => {
-                 const subCheck = sub.isCompleted ? '[x]' : '[ ]';
-                 text += `   - ${subCheck} ${sub.instruction}\n`;
-              });
-           }
-       } else {
-          text += `${idx + 1}. ${t.simultaneous}:\n`;
-          item.group.steps.forEach((step) => {
-             const check = step.isCompleted ? '[x]' : '[ ]';
-             text += `   - ${check} ${step.instruction}\n`;
-              if (step.subSteps) {
-                 step.subSteps.forEach((sub) => {
-                    const subCheck = sub.isCompleted ? '[x]' : '[ ]';
-                    text += `     * ${subCheck} ${sub.instruction}\n`;
-                 });
-              }
+      if (item.type === 'single') {
+        const check = item.step.isCompleted ? '[x]' : '[ ]';
+        text += `${idx + 1}. ${check} ${item.step.instruction}\n`;
+        if (item.step.subSteps) {
+          item.step.subSteps.forEach((sub) => {
+            const subCheck = sub.isCompleted ? '[x]' : '[ ]';
+            text += `   - ${subCheck} ${sub.instruction}\n`;
           });
-       }
+        }
+      } else {
+        text += `${idx + 1}. ${t.simultaneous}:\n`;
+        item.group.steps.forEach((step) => {
+          const check = step.isCompleted ? '[x]' : '[ ]';
+          text += `   - ${check} ${step.instruction}\n`;
+          if (step.subSteps) {
+            step.subSteps.forEach((sub) => {
+              const subCheck = sub.isCompleted ? '[x]' : '[ ]';
+              text += `     * ${subCheck} ${sub.instruction}\n`;
+            });
+          }
+        });
+      }
     });
 
     if (state.resources.length > 0) {
-        text += `\n--------------------------------\n\n`;
-        text += `${t.headerResources}:\n`;
-        state.resources.forEach(res => {
-           text += `\n[${res.name}]\n`;
-           if (res.acquisitionSteps) {
-               res.acquisitionSteps.forEach((step, idx) => {
-                   const check = step.isCompleted ? '[x]' : '[ ]';
-                   text += `${idx + 1}. ${check} ${step.instruction}\n`;
-               });
-           } else {
-               text += `(Plan not generated yet)\n`;
-           }
-        });
+      text += `\n--------------------------------\n\n`;
+      text += `${t.headerResources}:\n`;
+      state.resources.forEach(res => {
+        text += `\n[${res.name}]\n`;
+        if (res.acquisitionSteps) {
+          res.acquisitionSteps.forEach((step, idx) => {
+            const check = step.isCompleted ? '[x]' : '[ ]';
+            text += `${idx + 1}. ${check} ${step.instruction}\n`;
+          });
+        } else {
+          text += `(Plan not generated yet)\n`;
+        }
+      });
     }
 
     return text;
@@ -597,7 +597,7 @@ const AppContent: React.FC = () => {
   const handleDownloadPlan = () => {
     const text = generatePlainText();
     const element = document.createElement("a");
-    const file = new Blob([text], {type: 'text/markdown'});
+    const file = new Blob([text], { type: 'text/markdown' });
     element.href = URL.createObjectURL(file);
     element.download = "process-jinn-plan.md";
     document.body.appendChild(element); // Required for this to work in FireFox
@@ -619,9 +619,9 @@ const AppContent: React.FC = () => {
           </div>
           <h1 className="text-xl font-bold tracking-tight text-slate-800 group-hover:text-indigo-600 transition-colors">{t.appTitle}</h1>
         </div>
-        
+
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={toggleLanguage}
             className="text-sm font-semibold text-slate-600 hover:text-indigo-600 px-3 py-1.5 rounded-md hover:bg-slate-100 transition-colors border border-transparent hover:border-indigo-100"
           >
@@ -639,7 +639,7 @@ const AppContent: React.FC = () => {
               </button>
 
               {currentView === 'planner' && state.stage !== 'INPUT' && state.stage !== 'PROCESSING' && (
-                <button 
+                <button
                   onClick={handleSaveProcess}
                   disabled={saving || !state.description.trim()}
                   className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed rounded-md transition-colors"
@@ -659,12 +659,12 @@ const AppContent: React.FC = () => {
               )}
 
               {state.stage !== 'INPUT' && state.stage !== 'PROCESSING' && (
-                 <button 
-                   onClick={handleReset} 
-                   className="px-4 py-2 rounded-full text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-                 >
-                   {t.newGoal}
-                 </button>
+                <button
+                  onClick={handleReset}
+                  className="px-4 py-2 rounded-full text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                >
+                  {t.newGoal}
+                </button>
               )}
 
               <div className="flex items-center gap-2 pl-4 border-l border-slate-200">
@@ -684,7 +684,7 @@ const AppContent: React.FC = () => {
           )}
         </div>
       </div>
-      
+
       {saveSuccess && (
         <div className="absolute top-16 left-1/2 transform -translate-x-1/2 mt-2 px-4 py-2 bg-green-500 text-white text-sm font-medium rounded-lg shadow-lg">
           Process saved successfully!
@@ -716,7 +716,7 @@ const AppContent: React.FC = () => {
               onChange={(e) => setState(prev => ({ ...prev, description: e.target.value }))}
             />
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label htmlFor="quantification" className="block text-sm font-semibold text-slate-700">{t.labelSpecifics} <span className="text-slate-400 font-normal">{t.labelOptional}</span></label>
@@ -729,7 +729,7 @@ const AppContent: React.FC = () => {
                 onChange={(e) => setState(prev => ({ ...prev, quantification: e.target.value }))}
               />
             </div>
-            
+
             <div className="space-y-2">
               <label htmlFor="environment" className="block text-sm font-semibold text-slate-700">{t.labelEnvironment} <span className="text-slate-400 font-normal">{t.labelOptional}</span></label>
               <input
@@ -749,12 +749,12 @@ const AppContent: React.FC = () => {
             className="w-full py-4 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold text-lg rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 group relative overflow-hidden"
           >
             <span className="relative z-10 flex items-center gap-2">
-               {t.btnGenerate} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              {t.btnGenerate} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </span>
             <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-violet-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
           </button>
         </div>
-        
+
         {state.error && (
           <div className="p-4 bg-red-50 text-red-600 text-sm text-center rounded-b-2xl border-t border-red-100">
             {state.error}
@@ -766,7 +766,7 @@ const AppContent: React.FC = () => {
         <p className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-4">{t.examplesLabel}</p>
         <div className="flex flex-wrap justify-center gap-2">
           {t.examples.map(ex => (
-            <button 
+            <button
               key={ex}
               onClick={() => setState(prev => ({ ...prev, description: ex }))}
               className="px-4 py-2 bg-white border border-slate-200 rounded-full text-sm text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all shadow-sm"
@@ -781,19 +781,19 @@ const AppContent: React.FC = () => {
 
   const renderProcessingScreen = () => (
     <div className="max-w-xl mx-auto pt-32 text-center animate-in fade-in duration-700">
-       <div className="relative w-24 h-24 mx-auto mb-10">
-         <div className="absolute inset-0 border-[6px] border-slate-100 rounded-full"></div>
-         <div className="absolute inset-0 border-[6px] border-indigo-500 rounded-full border-t-transparent animate-spin"></div>
-         <div className="absolute inset-0 flex items-center justify-center">
-            <Wand2 className="w-8 h-8 text-indigo-500 animate-pulse" />
-         </div>
-       </div>
-       <h2 className="text-2xl font-bold text-slate-800 mb-3 min-h-[2rem]">
-         {state.selectedStrategyId ? t.loadingPlan : LOADING_MESSAGES[loadingMsgIndex]}
-       </h2>
-       <p className="text-slate-500">
-         {state.selectedStrategyId ? "" : "This might take a moment as we calculate the best path."}
-       </p>
+      <div className="relative w-24 h-24 mx-auto mb-10">
+        <div className="absolute inset-0 border-[6px] border-slate-100 rounded-full"></div>
+        <div className="absolute inset-0 border-[6px] border-indigo-500 rounded-full border-t-transparent animate-spin"></div>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Wand2 className="w-8 h-8 text-indigo-500 animate-pulse" />
+        </div>
+      </div>
+      <h2 className="text-2xl font-bold text-slate-800 mb-3 min-h-[2rem]">
+        {state.selectedStrategyId ? t.loadingPlan : LOADING_MESSAGES[loadingMsgIndex]}
+      </h2>
+      <p className="text-slate-500">
+        {state.selectedStrategyId ? "" : "This might take a moment as we calculate the best path."}
+      </p>
     </div>
   );
 
@@ -805,39 +805,71 @@ const AppContent: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {state.strategies.map((strategy, idx) => (
-          <div 
-            key={strategy.id} 
-            className="group relative bg-white rounded-2xl border border-slate-200 hover:border-indigo-200 shadow-sm hover:shadow-xl hover:shadow-indigo-100/50 transition-all duration-300 flex flex-col h-full overflow-hidden cursor-pointer"
-            onClick={() => handleSelectStrategy(strategy.id)}
-          >
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            
-            <div className="p-8 flex-grow">
-              <div className="flex items-center gap-4 mb-6">
-                <span className="w-10 h-10 rounded-xl bg-slate-50 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600 flex items-center justify-center text-lg font-bold border border-slate-100 group-hover:border-indigo-100 transition-colors">
-                  {idx + 1}
-                </span>
-                <h3 className="text-xl font-bold text-slate-900 leading-tight group-hover:text-indigo-700 transition-colors">
-                  {strategy.title}
-                </h3>
+        {state.strategies.map((strategy, idx) => {
+          // Approach type badge styling
+          const approachConfig: Record<string, { label: string; icon: string; color: string }> = {
+            practical: { label: state.language === 'zh' ? '实用方案' : 'Practical', icon: '🛠️', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+            systematic: { label: state.language === 'zh' ? '系统方案' : 'Systematic', icon: '📋', color: 'bg-purple-100 text-purple-700 border-purple-200' },
+            creative: { label: state.language === 'zh' ? '创新方案' : 'Creative', icon: '💡', color: 'bg-orange-100 text-orange-700 border-orange-200' }
+          };
+          const approachType = (strategy.approachType || ['practical', 'systematic', 'creative'][idx]).toLowerCase();
+          const approachInfo = approachConfig[approachType] || approachConfig['practical'];
+
+          return (
+            <div
+              key={strategy.id}
+              className="group relative bg-white rounded-2xl border border-slate-200 hover:border-indigo-200 shadow-sm hover:shadow-xl hover:shadow-indigo-100/50 transition-all duration-300 flex flex-col h-full overflow-hidden cursor-pointer"
+              onClick={() => handleSelectStrategy(strategy.id)}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+
+              <div className="p-8 flex-grow">
+                <div className="flex items-center justify-between mb-4">
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${approachInfo.color}`}>
+                    {approachInfo.icon} {approachInfo.label}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-4 mb-4">
+                  <span className="w-10 h-10 rounded-xl bg-slate-50 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600 flex items-center justify-center text-lg font-bold border border-slate-100 group-hover:border-indigo-100 transition-colors">
+                    {idx + 1}
+                  </span>
+                  <h3 className="text-xl font-bold text-slate-900 leading-tight group-hover:text-indigo-700 transition-colors">
+                    {strategy.title}
+                  </h3>
+                </div>
+                <p className="text-slate-600 leading-relaxed mb-4">
+                  {strategy.description}
+                </p>
+
+                {strategy.firstAction && (
+                  <div className="mt-4 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                    <p className="text-xs font-semibold text-indigo-600 mb-1">
+                      {state.language === 'zh' ? '✨ 今天就能开始' : '✨ Start Today'}
+                    </p>
+                    <p className="text-sm text-slate-700">{strategy.firstAction}</p>
+                  </div>
+                )}
+
+                {strategy.keyAdvantage && (
+                  <p className="mt-3 text-xs text-slate-500 italic">
+                    💡 {strategy.keyAdvantage}
+                  </p>
+                )}
               </div>
-              <p className="text-slate-600 leading-relaxed">
-                {strategy.description}
-              </p>
+
+              <div className="p-6 bg-slate-50/50 border-t border-slate-100 mt-auto">
+                <button className="w-full py-3 bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl text-sm group-hover:bg-indigo-600 group-hover:text-white group-hover:border-transparent transition-all flex items-center justify-center gap-2 shadow-sm">
+                  {t.btnSelect} <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            
-            <div className="p-6 bg-slate-50/50 border-t border-slate-100 mt-auto">
-              <button className="w-full py-3 bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl text-sm group-hover:bg-indigo-600 group-hover:text-white group-hover:border-transparent transition-all flex items-center justify-center gap-2 shadow-sm">
-                {t.btnSelect} <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
-      
+
       <div className="text-center">
-         <button onClick={handleReset} className="text-slate-400 hover:text-slate-600 text-sm font-medium">
+        <button onClick={handleReset} className="text-slate-400 hover:text-slate-600 text-sm font-medium">
           {t.newGoal}
         </button>
       </div>
@@ -852,29 +884,29 @@ const AppContent: React.FC = () => {
     return (
       <div className="animate-in fade-in duration-500 pb-20">
         <div className="max-w-7xl mx-auto mb-8 flex items-center justify-between">
-           <button 
-             onClick={handleBackToSelection}
-             className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors font-medium text-sm px-4 py-2 rounded-full hover:bg-white border border-transparent hover:border-slate-200"
-           >
-             <ArrowLeft className="w-4 h-4" /> {t.btnBack}
-           </button>
+          <button
+            onClick={handleBackToSelection}
+            className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors font-medium text-sm px-4 py-2 rounded-full hover:bg-white border border-transparent hover:border-slate-200"
+          >
+            <ArrowLeft className="w-4 h-4" /> {t.btnBack}
+          </button>
 
-           <div className="flex gap-2">
-              <button
-                onClick={handleCopyPlan}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 hover:border-indigo-200 hover:text-indigo-600 transition-all shadow-sm"
-              >
-                {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                {copied ? t.copied : t.btnCopy}
-              </button>
-              <button
-                onClick={handleDownloadPlan}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-800 text-white rounded-xl text-sm font-semibold hover:bg-slate-700 transition-all shadow-sm hover:shadow"
-              >
-                <Download className="w-4 h-4" />
-                {t.btnSave}
-              </button>
-           </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleCopyPlan}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 hover:border-indigo-200 hover:text-indigo-600 transition-all shadow-sm"
+            >
+              {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+              {copied ? t.copied : t.btnCopy}
+            </button>
+            <button
+              onClick={handleDownloadPlan}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-800 text-white rounded-xl text-sm font-semibold hover:bg-slate-700 transition-all shadow-sm hover:shadow"
+            >
+              <Download className="w-4 h-4" />
+              {t.btnSave}
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative transition-all duration-300">
@@ -882,27 +914,27 @@ const AppContent: React.FC = () => {
           <div className={`${isPanelOpen ? 'lg:col-span-8' : 'lg:col-span-12'} space-y-6 transition-all duration-500`}>
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
               <div className="p-8 border-b border-slate-100 bg-slate-50/30">
-                 <div className="flex items-center gap-3 mb-3">
-                    <span className="px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider">{t.headerSelected}</span>
-                 </div>
-                 <h2 className="text-3xl font-bold text-slate-900 mb-3">{activeStrategy.title}</h2>
-                 <p className="text-lg text-slate-600 leading-relaxed">{activeStrategy.description}</p>
-                 
-                 {/* Tip is now shown here when panel is closed to guide user */}
-                 {!isPanelOpen && (
-                   <div className="mt-4 flex items-center gap-2 text-sm text-slate-500 bg-blue-50/50 p-3 rounded-lg border border-blue-100/50 max-w-fit">
-                      <Layers className="w-4 h-4 text-blue-500" />
-                      <span>{t.resourceTip} <span className="font-semibold text-indigo-600">Blue Pills</span> {t.resourceTip3}</span>
-                   </div>
-                 )}
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider">{t.headerSelected}</span>
+                </div>
+                <h2 className="text-3xl font-bold text-slate-900 mb-3">{activeStrategy.title}</h2>
+                <p className="text-lg text-slate-600 leading-relaxed">{activeStrategy.description}</p>
+
+                {/* Tip is now shown here when panel is closed to guide user */}
+                {!isPanelOpen && (
+                  <div className="mt-4 flex items-center gap-2 text-sm text-slate-500 bg-blue-50/50 p-3 rounded-lg border border-blue-100/50 max-w-fit">
+                    <Layers className="w-4 h-4 text-blue-500" />
+                    <span>{t.resourceTip} <span className="font-semibold text-indigo-600">Blue Pills</span> {t.resourceTip3}</span>
+                  </div>
+                )}
               </div>
               <div className="p-8">
                 <div className="flex items-center gap-2 mb-8 text-slate-400 font-semibold uppercase text-xs tracking-wider">
                   <Layers className="w-4 h-4" /> {t.headerRoadmap}
                 </div>
-                <StepList 
-                  items={activeStrategy.plan} 
-                  onExpandStep={(step) => handleExpandStep(step, activeStrategy.title)} 
+                <StepList
+                  items={activeStrategy.plan}
+                  onExpandStep={(step) => handleExpandStep(step, activeStrategy.title)}
                   onResourceClick={handleResourceClick}
                   onToggleComplete={handleToggleComplete}
                   onEditStep={handleEditStep}
@@ -928,21 +960,21 @@ const AppContent: React.FC = () => {
           {/* Right Column: Resource Panel (Conditionally Rendered) */}
           {isPanelOpen && (
             <div className="lg:col-span-4">
-               <div className="sticky top-24">
-                 <div className="flex items-center gap-2 text-slate-400 font-medium text-sm uppercase tracking-wider mb-4 px-1">
-                    {t.headerResources}
-                 </div>
-                 <ResourcePanel 
-                   resource={selectedResource} 
-                   onResourceClick={handleResourceClick}
-                   onClose={() => setState(prev => ({ ...prev, selectedResourceId: null }))}
-                   onToggleStepComplete={handleToggleResourceStepComplete}
-                   labels={{
-                     acquisitionPlan: t.acquisitionPlan,
-                     generating: t.generating
-                   }}
-                 />
-               </div>
+              <div className="sticky top-24">
+                <div className="flex items-center gap-2 text-slate-400 font-medium text-sm uppercase tracking-wider mb-4 px-1">
+                  {t.headerResources}
+                </div>
+                <ResourcePanel
+                  resource={selectedResource}
+                  onResourceClick={handleResourceClick}
+                  onClose={() => setState(prev => ({ ...prev, selectedResourceId: null }))}
+                  onToggleStepComplete={handleToggleResourceStepComplete}
+                  labels={{
+                    acquisitionPlan: t.acquisitionPlan,
+                    generating: t.generating
+                  }}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -958,7 +990,7 @@ const AppContent: React.FC = () => {
     return (
       <>
         {renderHeader()}
-        <ProcessHistory 
+        <ProcessHistory
           onLoadProcess={handleLoadProcess}
           onBack={() => setCurrentView('planner')}
         />

@@ -19,10 +19,11 @@ if (!apiKey) {
 }
 
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
-const MODEL_NAME = 'gemini-2.0-flash';
+const MODEL_NAME = 'gemini-3-flash';
 
 /**
- * Generates 3 strategies (Titles & Descriptions only) for speed optimization.
+ * Generates 3 strategies with different approaches (not difficulty levels).
+ * Focuses on goal achievement methods, using user's provided timeline/context.
  */
 export const generateStrategies = async (
   goal: string,
@@ -38,25 +39,38 @@ export const generateStrategies = async (
 
   const prompt = `
     User Goal: "${goal}"
-    Quantification: "${quantification}"
-    Context/Environment: "${environment}"
+    User's Timeline & Metrics: "${quantification}"
+    User's Context/Environment: "${environment}"
 
-    Task: Generate exactly 3 distinct, highly reliable, and realistic strategies (options) to achieve this goal, taking into account the user's specific context/environment if provided.
-    
-    Requirements:
-    1. Output in ${langName}.
-    2. Provide ONLY the title and a persuasive description for each strategy.
-    3. DO NOT generate the detailed steps yet.
+    Task: Generate exactly 3 FUNDAMENTALLY DIFFERENT strategies (approaches/methods) to achieve this goal.
+
+    IMPORTANT: 
+    - Do NOT generate strategies based on difficulty levels (easy/medium/hard)
+    - Do NOT generate strategies based on time length differences
+    - The user has already specified their timeline and context above - USE IT for all 3 strategies
+    - Focus on DIFFERENT METHODS/APPROACHES to reach the same goal
+
+    STRATEGY DIVERSITY REQUIREMENTS:
+    1. Strategy 1 (Practical Approach): A conventional, proven method that most people would use
+    2. Strategy 2 (Systematic Approach): A structured, methodical approach with clear milestones
+    3. Strategy 3 (Creative/Alternative Approach): An unconventional or innovative method
+
+    FOR EACH STRATEGY:
+    - Title: A clear, distinctive name for this approach
+    - Description: How this method works and why it's effective
+    - First Action: The specific first step the user can take TODAY
+    - Key Advantage: What makes this approach unique compared to others
+
+    Output in ${langName}.
   `;
 
   try {
-    // Use standardized SDK call with structured JSON output
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         responseMimeType: "application/json",
-        systemInstruction: `You are a helpful expert planner. Generate exactly 3 distinct strategies. Output in ${langName}.`,
+        systemInstruction: `You are a creative strategy expert. Generate 3 fundamentally DIFFERENT approaches (not difficulty levels) to achieve the user's goal. Each strategy should be a unique METHOD, not just a faster/slower version of the same thing. Use the user's provided timeline and context. Output in ${langName}.`,
         responseSchema: {
           type: Type.ARRAY,
           items: {
@@ -64,8 +78,11 @@ export const generateStrategies = async (
             properties: {
               title: { type: Type.STRING },
               description: { type: Type.STRING },
+              approachType: { type: Type.STRING },
+              firstAction: { type: Type.STRING },
+              keyAdvantage: { type: Type.STRING },
             },
-            required: ["title", "description"],
+            required: ["title", "description", "firstAction", "keyAdvantage"],
           },
         },
       },
@@ -74,19 +91,29 @@ export const generateStrategies = async (
     const text = response.text || "[]";
     const rawStrategies = JSON.parse(text);
 
+    // Map approach types for display
+    const approachTypes = ['practical', 'systematic', 'creative'];
+
     // Map to Strategy objects with IDs
     const strategies: Strategy[] = rawStrategies.slice(0, 3).map((item: any, idx: number) => ({
       id: `strategy-${idx + 1}`,
       title: item.title || `Strategy ${idx + 1}`,
-      description: item.description || `An approach to achieve your goal.`
+      description: item.description || `An approach to achieve your goal.`,
+      approachType: item.approachType || approachTypes[idx],
+      firstAction: item.firstAction || '',
+      keyAdvantage: item.keyAdvantage || ''
     }));
 
     // Ensure we have exactly 3 strategies
     while (strategies.length < 3) {
+      const idx = strategies.length;
       strategies.push({
-        id: `strategy-${strategies.length + 1}`,
-        title: `Strategy ${strategies.length + 1}`,
-        description: `An alternative approach to achieve your goal.`
+        id: `strategy-${idx + 1}`,
+        title: `Strategy ${idx + 1}`,
+        description: `An alternative approach to achieve your goal.`,
+        approachType: approachTypes[idx],
+        firstAction: '',
+        keyAdvantage: ''
       });
     }
 
@@ -99,6 +126,7 @@ export const generateStrategies = async (
 
 /**
  * Generates the detailed plan for a specific strategy.
+ * Enhanced with SMART criteria for actionable steps.
  */
 export const generateStrategyPlan = async (
   strategy: Strategy,
@@ -113,6 +141,7 @@ export const generateStrategyPlan = async (
     Context/Environment: "${environment}"
     Selected Strategy: "${strategy.title}"
     Strategy Description: "${strategy.description}"
+    Strategy Difficulty: "${strategy.difficulty || 'moderate'}"
 
     Task: Generate a detailed execution plan for this strategy.
 
@@ -120,8 +149,18 @@ export const generateStrategyPlan = async (
     1. Output in ${langName}.
     2. The plan must consist of 3 to 5 high-level steps.
     3. An item can be a "single" step OR a "parallel" group of steps.
-    4. For each step instruction: wrap specific tools, software, or physical resources in square brackets like [Hammer] or [VS Code]. Keep resource names in ${langName} or English as appropriate.
+    4. For each step instruction: wrap specific tools, software, or physical resources in square brackets like [Hammer] or [VS Code].
     5. List extracted resources array for each step.
+
+    SMART CRITERIA - Each step MUST be:
+    - Specific: Include exact tools, quantities, methods, or locations (not vague like "learn more")
+    - Measurable: Have a clear completion criteria (what does "done" look like?)
+    - Achievable: Not require special permissions, expensive tools, or rare resources
+    - Relevant: Directly contribute to the goal
+    - Time-bound: Be completable in a reasonable timeframe
+
+    GOOD EXAMPLE: "Download and install [VS Code] from the official website, then open it and create a new file named index.html"
+    BAD EXAMPLE: "Set up your development environment" (too vague)
   `;
 
   try {
