@@ -1,0 +1,42 @@
+import path from 'path';
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, '.', '');
+  // Vercel injects env vars into process.env during build, loadEnv only reads .env files
+  // So we prioritize process.env for Vercel, then fall back to .env file values
+  const vKey = process.env.VITE_API_KEY || process.env.VITE_GEMINI_API_KEY ||
+    env.VITE_API_KEY || env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY;
+
+  return {
+    server: {
+      port: 3000,
+      host: '0.0.0.0',
+    },
+    plugins: [react()],
+    define: {
+      'process.env.VITE_GEMINI_API_KEY': JSON.stringify(vKey),
+      'process.env.GEMINI_API_KEY': JSON.stringify(vKey),
+      'process.env.API_KEY': JSON.stringify(vKey)
+    },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      }
+    },
+    build: {
+      outDir: 'dist',
+      sourcemap: false,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom'],
+            ui: ['lucide-react'],
+            utils: ['date-fns']
+          }
+        }
+      }
+    }
+  };
+});
